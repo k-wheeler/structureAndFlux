@@ -65,15 +65,16 @@ footprintdf <- st_transform(footprintdf, crs = paste("EPSG:326",
                          sep=""))# Has the same crs a
 
 
-footprintl1 <- st_transform(footprintl1, crs = paste("EPSG:326", 
-                                                     sprintf("%02d", 
-                                                             as.numeric(gsub('N', '', utm_zone_site))), 
-                                                     sep=""))
-
-footprintl2 <- st_transform(footprintl2, crs = paste("EPSG:326", 
-                                                     sprintf("%02d", 
-                                                             as.numeric(gsub('N', '', utm_zone_site))), 
-                                                     sep=""))
+# Testing out buffer size step however runs into issues if buffer is greater than 1km
+# footprintl1 <- st_transform(footprintl1, crs = paste("EPSG:326", 
+#                                                      sprintf("%02d", 
+#                                                              as.numeric(gsub('N', '', utm_zone_site))), 
+#                                                      sep=""))
+# 
+# footprintl2 <- st_transform(footprintl2, crs = paste("EPSG:326", 
+#                                                      sprintf("%02d", 
+#                                                              as.numeric(gsub('N', '', utm_zone_site))), 
+#                                                      sep=""))
 
 
 # Create the buffersize for extraction of the site.
@@ -117,6 +118,10 @@ plot(footprintdf$geom_poly[1:20])
 points(x= c(easting_site), y=c(northing_site), add=TRUE)
 
 poly <- footprintdf$geom_poly[1]
+polycoords <- 
+eastings <- st_coordinates(poly)[1:3,1]
+northings <- st_coordinates(poly)[1:3,2]
+
 
 # f <- data.frame(
 #   lon = as.numeric(footprintinfo[1,c(5, 7)]),
@@ -132,12 +137,13 @@ poly <- footprintdf$geom_poly[1]
 # siteID <- "MLBS"
 # eastings<- c(min(utmcor$X), min(utmcor$X),max(utmcor$X),max(utmcor$X)) #to get the entire extent of the footprint
 # northings<-c(min(utmcor$Y), max(utmcor$Y),min(utmcor$Y), max(utmcor$Y)) #to get the entire extent of the footprint
-# byTileAOP(dpID=dpID,
-#           site=siteID,
-#           year="2021",
-#           easting=eastings,
-#           northing=northings,
-#           check.size = FALSE) 
+byTileAOP(dpID=dpID,
+          site=siteID,
+          year="2021",
+          easting=eastings,
+          northing=northings,
+          savepath=datadir,
+          check.size = FALSE)
 
 #Read in Neon AOP data
 dpID <- "DP1.30003.001"
@@ -146,14 +152,16 @@ dpID <- "DP1.30003.001"
 # eastings<- c(min(utmcor$X), min(utmcor$X),max(utmcor$X),max(utmcor$X)) #to get the entire extent of the footprint
 # northings<-c(min(utmcor$Y), max(utmcor$Y),min(utmcor$Y), max(utmcor$Y)) #to get the entire extent of the footprint
 
-byTileAOP(dpID=dpID,
-          site=site_oi,
-          year=yr,
-          easting=easting_site,
-          northing=northing_site,
-          buffer = buffersize,
-          savepath=datadir,
-          check.size = FALSE)
+
+# Utilizing buffer method. Need to think about if this will have impacts
+# byTileAOP(dpID=dpID,
+#           site=site_oi,
+#           year=yr,
+#           easting=easting_site,
+#           northing=northing_site,
+#           buffer = buffersize,
+#           savepath=datadir,
+#           check.size = FALSE)
 
 
 #Lidar data as a LASCatalog (all n files are loaded)
@@ -170,11 +178,11 @@ ctg<-readLAScatalog(file.path(datadir, lidar_filepath))
 
 laz_footprint<-clip_roi(ctg, poly) #clipping the .las file to the flux footprint area
 laz_footprint_filter<-filter_poi(laz_footprint,Z>1000, Z<1300 ) #filtering really high and low values; for other sites we may want to consider some outlier analysis?
-writeLAS(laz_footprint_filter, paste0("lidar_footprint_", siteID,".laz"))
+writeLAS(laz_footprint_filter, paste0(datadir,'/', "lidar_footprint_", siteID,".laz"))
 
 #Code modified from SPECschool resources (https://github.com/kdahlin/SPEC_School/blob/main/StationG/lidarData_KW.R)
 # Convert .laz or .las file into a voxelized lidar array
-laz.data <- laz.to.array("lidar_footprint_MLBS.laz", 
+laz.data <- laz.to.array(paste0(datadir,'/', "lidar_footprint_", siteID,".laz"), 
                          voxel.resolution = 10, 
                          z.resolution = 1,
                          use.classified.returns = TRUE)
@@ -191,6 +199,10 @@ lad.estimates <- machorn.lad(leveld.lidar.array = level.canopy,
 #Structure metrics
 epsg_codes<-32617
 # Calculate the ratio of filled and empty voxels in a given column of the canopy
+# This is throwing a warning
+# Warning message:
+#In CPL_crs_from_input(x) :
+#  GDAL Message 1: +init=epsg:XXXX syntax is deprecated. It might return a CRS with a non-EPSG compliant axis order.
 empty.filled.ratio <- canopy.porosity.filled.ratio(lad.array = lad.estimates,
                                                    laz.array = laz.data,
                                                    ht.cut = 5,
